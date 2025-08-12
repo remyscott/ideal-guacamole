@@ -1,22 +1,9 @@
-import pygame as pg, numpy as np
-from pygame.locals import *
+from numpy import array, float64
+from pygame.locals import K_d, K_a, K_s, K_w 
 from random import randint
-pg.init()
-
-
-from game_functions import *
-from settings_functions import Settings_functions
-Settings_functions.reset_settings()
-Settings = Settings_functions.get_settings()
-
-should_be_transparent = (0, 255, 255, 0)
-background_color = (200,220,240)
-
-
-
 
 class Circle():
-    def __init__(self):
+    def __init__(self, player_controlled: bool = False):
         #By default dependent on size
         self.size = 1
         self.acceleration_ps = self.size*60
@@ -26,12 +13,13 @@ class Circle():
         self.energy_per_fuel = 500
         self.max_fuel = self.size*.2
         self.mass = self.size**2
-        self.camera_offset = np.array((-self.size, -self.size))
+        self.camera_offset = array((-self.size, -self.size))
         
 
         #Basic non-attributes
-        self.pos = np.array([randint(0,30),randint(0,15)],np.float64)
-        self.vel = np.array([1,0],np.float64)
+        self.player_controlled = player_controlled
+        self.pos = array([randint(0,30),randint(0,15)],np.float64)
+        self.vel = array([1,0],float64)
         self.ability_charge = 0
         self.energy = 1
         self.ability_cooldown_left = 0
@@ -47,23 +35,20 @@ class Circle():
         self.max_ability_cooldown = 1
         self.sheild_momentum_per_energy = 100
         self.ability_charge_time = 1
-        self.health = 1
         self.ability_factor = 60
 
         #behavior
         self.safety = self.max_energy/5
 
         #for collison
-        self.collision_movement_needed = np.array([0,0], np.float64)
+        self.collision_movement_needed = array([0,0], float64)
 
 
-    def actions(self, keys_down, key_downs, mouse_pos, mouses_down):
+    def actions(self, inputs):
         for key in keys_down:
             if self.energy >= self.safety:
                 if key == K_d:
                     self.accelerate([1,0])
-                if key == K_q:
-                    self.health -= .1
                 if key == K_w:
                     self.accelerate([0,-1])
                 if key == K_a:
@@ -71,41 +56,41 @@ class Circle():
                 if key == K_s:
                     self.accelerate([0,1])
         
-        if mouses_down[2]:
+        if inputs.mouses_down[2]:
             if self.ability_cooldown_left <= 0 and self.energy > self.safety:
-                self.ability_charge += 1/(Settings.FRAMERATE*self.ability_charge_time)
-                self.energy -= 1/(Settings.FRAMERATE*self.ability_charge_time)
+                self.ability_charge += 1/(game.settings.framerate*self.ability_charge_time)
+                self.energy -= 1/(game.settings.framerate*self.ability_charge_time)
         
         
         elif self.ability_charge > 0:
             self.dash()
         
-    def update(self, actions, keys_down, key_downs, mouse_pos, mouses_down):
+    def update(self, inputs):
         if self.ability_cooldown_left > 0:
-            self.ability_cooldown_left -= 1/Settings.FRAMERATE
-        if self.energy < self.max_energy - self.battery_charge_per_second/Settings.FRAMERATE and self.fuel_left > 0:
-            self.energy += self.battery_charge_per_second/Settings.FRAMERATE
-            self.fuel_left -= (self.battery_charge_per_second/Settings.FRAMERATE)/self.energy_per_fuel
+            self.ability_cooldown_left -= 1/game.settings.framerate
+        if self.energy < self.max_energy and self.fuel_left > 0:
+            self.energy += self.battery_charge_per_second/game.settings.framerate
+            self.fuel_left -= (self.battery_charge_per_second/game.settings.framerate)/self.energy_per_fuel
         
-        if actions:
-            self.actions(keys_down, key_downs, mouse_pos, mouses_down)
+        if self.player_controlled:
+            self.actions(inputs)
 
         self.ability_charge -= (self.ability_charge/10)**2
 
 
 
 
-        self.vel -= self.vel/(self.size*.54)/Settings.FRAMERATE
-        self.pos += self.vel/Settings.FRAMERATE
+        self.vel -= self.vel/(self.size*.54)/game.settings.framerate
+        self.pos += self.vel/game.settings.framerate
 
     def accelerate(self, vector):
-        self.vel += self.acceleration_ps * np.array(vector) / ((self.size**2) * Settings.FRAMERATE)
+        self.vel += self.acceleration_ps * np.array(vector) / ((self.size**2) * game.settings.framerate)
         self.energy -= np.sqrt(vector[0]**2+vector[1]**2)/self.acceleration_per_energy
 
     def dash(self):
         dash_energy = self.ability_charge * self.ability_factor
         velocity_change =  dash_energy / self.size**2
-        dash_vector = (mouse_pos/Settings.CAMERA_ZOOM_FACTOR-self.pos+[-self.size,-self.size])/Settings.CAMERA_ZOOM_FACTOR
+        dash_vector = mouse_pos/game.settings.CAMERA_ZOOM_FACTOR-self.pos+[-self.size,-self.size]
         self.vel += normalize(dash_vector) * velocity_change
         
         self.ability_charge = 0
@@ -118,12 +103,14 @@ class Circle():
 
         distance_needed = character_1.size + character_2.size - distance
         vector_needed = normalized_vector * distance_needed * (1-c1_to_whole)
-        collision_energy = (distance_needed*c1_to_whole*c1_mass + distance_needed*(1-c1_to_whole)*c2_mass)*Settings.FRAMERATE
+        collision_energy = (distance_needed*c1_to_whole*c1_mass + distance_needed*(1-c1_to_whole)*c2_mass)*game.settings.framerate
                     
         character_1.collision_movement_needed += vector_needed
         character_1.vel += 2*vector_needed
         character_1.energy -= collision_energy/character_1.sheild_momentum_per_energy
 
+    def apply_collision_updates(self):
+        self.pos += self.collision_movement_needed
 
     def get_render(self, camera_zoom_factor):
         
@@ -160,10 +147,10 @@ class Circle():
 
         rect = fuel_render.get_rect()
         fuel_render_offset_vector = -np.array(rect.size)
-        #for x in range(0,rect.size[0]):
-            #for y in range(0,rect.size[1]):
-                #if randint(0,101)/100 > c.fuel_left/c.max_fuel:
-                #    fuel_render.set_at((x,y),(0,0,0,0))
+        for x in range(0,rect.size[0]):
+            for y in range(0,rect.size[1]):
+                if randint(0,101)/100 > self.fuel_left/self.max_fuel:
+                    fuel_render.set_at((x,y),(0,0,0,0))
         return(fuel_render, fuel_render_offset_vector)
         
     def render_battery(self, camera_zoom_factor): #character, diameter
@@ -195,99 +182,3 @@ class Circle():
         if self.ability_charge > 1 and self.ability_charge <= 6 :
             color = (max(255-(self.ability_charge-1)*51, 0),max(255-(self.ability_charge-1)*51, 0),255,255)
         return(color)
-
-    
-
-class Camera():
-    def __init__(self, position):
-        self.zoom_factor = 40
-        self.pos = np.array(position, np.float64)
-        self.screen = pg.surface.Surface((Settings.SCREEN_WIDTH, Settings.SCREEN_HEIGHT))
-        
-    def render_screen(self, characters):
-        self.screen.fill(background_color)
-        
-        for character in characters:
-            character_render = character.get_render(self.zoom_factor)
-            self.screen.blit(character_render, self.pos_to_screenspace(character.pos, character.camera_offset))
-        
-        return(self.screen)
-    def pos_to_screenspace(self, position, offset):
-        camera_relative_position = (position+offset - self.pos) * self.zoom_factor
-        return(camera_relative_position)
-
-    def get_screen(self):
-        return(self.screen)
-
-display = pg.display.set_mode((Settings.DISPLAY_WIDTH, Settings.DISPLAY_HEIGHT), Settings.FULLSCREEN)
-clock = pg.time.Clock()
-default_camera = Camera(position = (0,0))
-running = True
-
-
-sword_dude_0 = Circle()
-
-player_controlled = [sword_dude_0]
-all_characters = [sword_dude_0]
-
-keys_down = []
-key_downs = []
-
-while running:
-    events = pg.event.get()
-    mouse_pos = np.array(pg.mouse.get_pos())
-    mouses_down = list(pg.mouse.get_pressed())
-    key_downs = []
-    for event in events:
-        if event.type == pg.QUIT:
-            running = False
-        if event.type == pg.KEYDOWN:
-            keys_down.append(event.key)
-            key_downs.append(event.key)
-            if event.key == K_e:
-                new_thing = Circle()
-                player_controlled.append(new_thing)
-                all_characters.append(new_thing)
-
-        if event.type == pg.KEYUP:
-            keys_down.remove(event.key)
-
-    
-    
-    
-    for character in player_controlled:
-        character.update(True,keys_down, key_downs, mouse_pos, mouses_down)
-
-    for character in all_characters:
-        if character not in player_controlled:
-            character.update(False,keys_down, key_downs, mouse_pos, mouses_down)
-    
-    for character_1 in all_characters:
-        for character_2 in all_characters:
-            if not character_1 == character_2:
-                # + character_2.vel/Settings.FRAMERATE
-                vector = (character_1.pos) - (character_2.pos)
-                distance = length(vector)
-
-                if distance <= character_1.size + character_2.size:
-                    character_1.resolve_collision(character_2)
-                    
-                    
-
-
-    
-    for character in all_characters:
-        if character.energy <= 0:
-            all_characters.remove(character)
-    
-    for character in all_characters:
-        character.pos += character.collision_movement_needed*1
-        character.collision_movement_needed *= 0
-
-    display.blit(default_camera.render_screen(all_characters), (0,0))
-
-    pg.display.flip()
-    clock.tick(Settings.FRAMERATE)
-
-
-pg.quit()

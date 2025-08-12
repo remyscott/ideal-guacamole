@@ -1,9 +1,9 @@
 import numpy as np
 
-def normalize(vector):
-    length = np.sqrt(vector[0]**2+vector[1]**2)
-    return(vector/length)
+def magnitude(vector):
+    vector_magnitude = np.sqrt(sum(component**2 for component in vector))
+    return(vector_magnitude)
 
-def length(vector):
-    length = np.sqrt(vector[0]**2+vector[1]**2)
-    return(length)
+def normalize(vector):
+    vector_length = magnitude(vector)
+    return(vector/vector_length)
