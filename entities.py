@@ -1,7 +1,9 @@
-from numpy import array, float64
+from numpy import array, float64, sqrt
 from pygame.locals import K_d, K_a, K_s, K_w 
 from random import randint
-
+from game_functions import normalize
+from pygame import surface, draw
+from constants import *
 class Circle():
     def __init__(self, player_controlled: bool = False):
         #By default dependent on size
@@ -18,7 +20,7 @@ class Circle():
 
         #Basic non-attributes
         self.player_controlled = player_controlled
-        self.pos = array([randint(0,30),randint(0,15)],np.float64)
+        self.pos = array([randint(0,30),randint(0,15)],float64)
         self.vel = array([1,0],float64)
         self.ability_charge = 0
         self.energy = 1
@@ -44,53 +46,53 @@ class Circle():
         self.collision_movement_needed = array([0,0], float64)
 
 
-    def actions(self, inputs):
-        for key in keys_down:
+    def actions(self, inputs, framerate):
+        for key in inputs.keys_down:
             if self.energy >= self.safety:
                 if key == K_d:
-                    self.accelerate([1,0])
+                    self.accelerate([1,0], framerate)
                 if key == K_w:
-                    self.accelerate([0,-1])
+                    self.accelerate([0,-1], framerate)
                 if key == K_a:
-                    self.accelerate([-1,0])
+                    self.accelerate([-1,0], framerate)
                 if key == K_s:
-                    self.accelerate([0,1])
+                    self.accelerate([0,1], framerate)
         
         if inputs.mouses_down[2]:
             if self.ability_cooldown_left <= 0 and self.energy > self.safety:
-                self.ability_charge += 1/(game.settings.framerate*self.ability_charge_time)
-                self.energy -= 1/(game.settings.framerate*self.ability_charge_time)
+                self.ability_charge += 1/(framerate*self.ability_charge_time)
+                self.energy -= 1/(framerate*self.ability_charge_time)
         
         
         elif self.ability_charge > 0:
-            self.dash()
+            self.dash(inputs)
         
-    def update(self, inputs):
+    def update(self, inputs, framerate):
         if self.ability_cooldown_left > 0:
-            self.ability_cooldown_left -= 1/game.settings.framerate
+            self.ability_cooldown_left -= 1/framerate
         if self.energy < self.max_energy and self.fuel_left > 0:
-            self.energy += self.battery_charge_per_second/game.settings.framerate
-            self.fuel_left -= (self.battery_charge_per_second/game.settings.framerate)/self.energy_per_fuel
+            self.energy += self.battery_charge_per_second/framerate
+            self.fuel_left -= (self.battery_charge_per_second/framerate)/self.energy_per_fuel
         
         if self.player_controlled:
-            self.actions(inputs)
+            self.actions(inputs, framerate)
 
         self.ability_charge -= (self.ability_charge/10)**2
 
 
 
 
-        self.vel -= self.vel/(self.size*.54)/game.settings.framerate
-        self.pos += self.vel/game.settings.framerate
+        self.vel -= self.vel/(self.size*.54)/framerate
+        self.pos += self.vel/framerate
 
-    def accelerate(self, vector):
-        self.vel += self.acceleration_ps * np.array(vector) / ((self.size**2) * game.settings.framerate)
-        self.energy -= np.sqrt(vector[0]**2+vector[1]**2)/self.acceleration_per_energy
+    def accelerate(self, vector, framerate):
+        self.vel += self.acceleration_ps * array(vector) / ((self.size**2) * framerate)
+        self.energy -= sqrt(vector[0]**2+vector[1]**2)/self.acceleration_per_energy
 
-    def dash(self):
+    def dash(self, inputs):
         dash_energy = self.ability_charge * self.ability_factor
         velocity_change =  dash_energy / self.size**2
-        dash_vector = mouse_pos/game.settings.CAMERA_ZOOM_FACTOR-self.pos+[-self.size,-self.size]
+        dash_vector = inputs.mouse_pos-self.pos
         self.vel += normalize(dash_vector) * velocity_change
         
         self.ability_charge = 0
@@ -121,7 +123,7 @@ class Circle():
         
         rect = hull_render.get_rect()
 
-        hull_render.blit(fuel_render, (np.array(rect.center)+fuel_render_offset_vector/2))
+        hull_render.blit(fuel_render, (array(rect.center)+fuel_render_offset_vector/2))
         hull_render.blit(ability_render, (rect.centerx, 0))                                                    
         hull_render.blit(energy_render, (0,0))
         
@@ -131,22 +133,22 @@ class Circle():
 
         radius_pixels = self.size*camera_zoom_factor
     
-        rendered_hull = pg.surface.Surface((radius_pixels*2, radius_pixels*2)).convert_alpha()
+        rendered_hull = surface.Surface((radius_pixels*2, radius_pixels*2)).convert_alpha()
         rendered_hull.fill(should_be_transparent)
-        pg.draw.circle(rendered_hull, self.color,rendered_hull.get_rect().center, radius_pixels, 0)
+        draw.circle(rendered_hull, self.color,rendered_hull.get_rect().center, radius_pixels, 0)
 
         return(rendered_hull)
 
     def render_fuel(self, camera_zoom_factor):
 
         fuel_radius_pixels = self.size*(self.max_fuel/self.size) *camera_zoom_factor
-        fuel_render = pg.surface.Surface((fuel_radius_pixels*2, fuel_radius_pixels*2)).convert_alpha()   
+        fuel_render = surface.Surface((fuel_radius_pixels*2, fuel_radius_pixels*2)).convert_alpha()   
         fuel_render.fill(should_be_transparent)
 
-        pg.draw.circle(fuel_render, (200,200,255,255),fuel_render.get_rect().center,fuel_radius_pixels,0)
+        draw.circle(fuel_render, (200,200,255,255),fuel_render.get_rect().center,fuel_radius_pixels,0)
 
         rect = fuel_render.get_rect()
-        fuel_render_offset_vector = -np.array(rect.size)
+        fuel_render_offset_vector = -array(rect.size)
         for x in range(0,rect.size[0]):
             for y in range(0,rect.size[1]):
                 if randint(0,101)/100 > self.fuel_left/self.max_fuel:
@@ -156,21 +158,21 @@ class Circle():
     def render_battery(self, camera_zoom_factor): #character, diameter
         battery_surface_size_pixels = self.size * camera_zoom_factor
         battery_radius_pixels = self.size*(self.energy/self.max_energy) *camera_zoom_factor
-        energy_render = pg.surface.Surface((battery_surface_size_pixels, battery_surface_size_pixels)).convert_alpha()   
+        energy_render = surface.Surface((battery_surface_size_pixels, battery_surface_size_pixels)).convert_alpha()   
         energy_render.fill(should_be_transparent)
-        pg.draw.circle(energy_render, (100,100,255,255), (battery_surface_size_pixels,battery_surface_size_pixels), battery_radius_pixels,0)
+        draw.circle(energy_render, (100,100,255,255), (battery_surface_size_pixels,battery_surface_size_pixels), battery_radius_pixels,0)
         return(energy_render)
     
     def render_ability(self, camera_zoom_factor):
         ability_radius_pixels = self.size*camera_zoom_factor
-        ability_render = pg.surface.Surface((ability_radius_pixels, ability_radius_pixels)).convert_alpha()   
+        ability_render = surface.Surface((ability_radius_pixels, ability_radius_pixels)).convert_alpha()   
         ability_render.fill(should_be_transparent)
 
         if self.ability_cooldown_left > 0:
-            pg.draw.circle(ability_render, (255,0,0, min((self.ability_cooldown_left/self.max_ability_cooldown)*255,255)) ,(0,ability_radius_pixels),ability_radius_pixels,0)
+            draw.circle(ability_render, (255,0,0, min((self.ability_cooldown_left/self.max_ability_cooldown)*255,255)) ,(0,ability_radius_pixels),ability_radius_pixels,0)
 
         elif self.ability_charge > 0:
-            pg.draw.circle(ability_render, self.get_ability_charge_color(), (0,ability_radius_pixels), ability_radius_pixels,0)
+            draw.circle(ability_render, self.get_ability_charge_color(), (0,ability_radius_pixels), ability_radius_pixels,0)
 
         return(ability_render)
 
