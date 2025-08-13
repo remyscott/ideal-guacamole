@@ -13,7 +13,7 @@ game = Game()
 
 
 
-dude = Circle()
+dude = Circle(True)
 
 game.add_entity(dude)
 
@@ -40,6 +40,7 @@ while running:
         if event.type == pg.KEYUP:
             keys_down.remove(event.key)
 
+    game.set_inputs(keys_down, key_downs, mouse_pos/game.camera.zoom_factor, mouses_down)
     game.tick()
     display.blit(game.get_rendered_screen(), (0,0))
     pg.display.flip()

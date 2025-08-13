@@ -13,6 +13,7 @@ class Settings:
     screen_height: int = 720
     framerate: int = 120
     camera_zoom_factor: int = 40
+    resolution: tuple =  (display_width, display_height)
 
     def get_settings(self):
         settings_path = Path('data/user/settings.bin')
